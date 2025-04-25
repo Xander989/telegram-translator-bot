@@ -2,9 +2,12 @@ import telebot
 from telebot import types
 from googletrans import Translator
 from db import get_connection
+import os
 
 
-with open('TOKEN.txt', 'r') as file:
+script_dir = os.path.dirname(os.path.abspath(__file__))
+token_path = os.path.join(script_dir, 'TOKEN.txt')
+with open(token_path, 'r') as file:
     bot = telebot.TeleBot(file.read().strip())
 
 translator = Translator()
