@@ -4,7 +4,7 @@ from googletrans import Translator
 from db import get_connection
 
 
-with open('/home/alex/Documents/Python/files/TOKEN.txt', 'r') as file:
+with open('TOKEN.txt', 'r') as file:
     bot = telebot.TeleBot(file.read().strip())
 
 translator = Translator()
@@ -35,6 +35,62 @@ def commands(message):
     button3 = types.InlineKeyboardButton("Français", callback_data='fr')
     markup.add(button1, button2, button3)
     bot.send_message(message.chat.id, "Choose a language", reply_markup=markup)
+
+@bot.message_handler(commands=['chatlanguage'])
+def commands(message):
+    markup = types.InlineKeyboardMarkup()
+    button1 = types.InlineKeyboardButton("Add a language", callback_data='add')
+    button2 = types.InlineKeyboardButton("Remove a language", callback_data='remove')
+    markup.add(button1, button2)
+    bot.send_message(message.chat.id, "Configure chat's languages", reply_markup=markup)
+
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'remove')
+def handle_callback(call):
+    conn = get_connection()
+    cur = conn.cursor()
+    markup = types.InlineKeyboardMarkup()
+    cur.execute("SELECT languages FROM chats WHERE id = %s", (call.message.chat.id,))
+    languages = cur.fetchone()[0]
+    if languages:
+        for lang in languages:
+            button = types.InlineKeyboardButton(str(lang), callback_data="remove_" + str(lang))
+            markup.add(button)
+        bot.send_message(call.message.chat.id, "Choose a language to remove", reply_markup=markup)
+    else:
+        bot.send_message(call.message.chat.id, "This chat has no added languages")
+
+
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("remove_"))
+def handle_callback(call):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT languages FROM chats WHERE id = %s;", (call.message.chat.id,))
+    languages = cur.fetchone()[0]
+    temp = call.data
+    lang = temp.replace("remove_", "")
+    print(lang)
+    print(languages)
+    if languages:
+        if lang in languages:
+            languages.remove(lang)
+            cur.execute("UPDATE chats SET languages = %s WHERE id = %s;", (languages, call.message.chat.id))
+            bot.send_message(call.message.chat.id, "Language successfully removed")
+
+
+    
+
+    
+    conn.commit()
+    cur.close()
+    conn.close()
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
