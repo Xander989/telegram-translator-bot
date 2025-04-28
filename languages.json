@@ -1,0 +1,7 @@
+[
+    {"code": "en", "name": "English"},
+    {"code": "fr", "name": "French"},
+    {"code": "es", "name": "Spanish"},
+    {"code": "ru", "name": "Русский"},
+    {"code": "zh-CN", "name": "中国人"}
+]

@@ -2,6 +2,7 @@ import telebot
 from telebot import types
 from googletrans import Translator
 from db import get_connection
+import json
 import os
 
 
@@ -9,6 +10,17 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 token_path = os.path.join(script_dir, 'TOKEN.txt')
 with open(token_path, 'r') as file:
     bot = telebot.TeleBot(file.read().strip())
+
+
+with open('languages.json', 'r') as file:
+    languages = json.load(file)
+
+code_to_name = {}
+
+for lang in languages:
+    code = lang['code']
+    name = lang['name']
+    code_to_name[code] = name
 
 translator = Translator()
 
@@ -33,12 +45,14 @@ def new_member_handler(message):
 @bot.message_handler(commands=['language'])
 def commands(message):
     markup = types.InlineKeyboardMarkup()
-    button1 = types.InlineKeyboardButton("Русский", callback_data='ru')
-    button2 = types.InlineKeyboardButton("English", callback_data='en')
-    button3 = types.InlineKeyboardButton("Français", callback_data='fr')
-    markup.add(button1, button2, button3)
+
+    for lang in languages:
+        button = types.InlineKeyboardButton(lang['name'], callback_data=lang['code'])
+        markup.add(button)
     bot.send_message(message.chat.id, "Choose a language", reply_markup=markup)
 
+
+# Add or Remove a language to a chat.
 @bot.message_handler(commands=['chatlanguage'])
 def commands(message):
     markup = types.InlineKeyboardMarkup()
@@ -48,7 +62,50 @@ def commands(message):
     bot.send_message(message.chat.id, "Configure chat's languages", reply_markup=markup)
 
 
+@bot.callback_query_handler(func=lambda call: call.data == 'add')
+def handle_callback(call):
+    conn = get_connection()
+    cur = conn.cursor()
+    markup = types.InlineKeyboardMarkup()
 
+    cur.execute("SELECT languages FROM chats WHERE id = %s", (call.message.chat.id,))
+    chat_langs = cur.fetchone()[0]
+    print(chat_langs)
+    temp_langs = languages
+    for clang in chat_langs:
+        temp_langs = [lang for lang in temp_langs if lang['code'] != clang]
+    for lang in temp_langs:
+        button = types.InlineKeyboardButton(lang['name'], callback_data="add_" + lang['code'])
+        markup.add(button)
+    
+    bot.send_message(call.message.chat.id, "Choose a language to add", reply_markup=markup)
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("add_"))
+def handle_callback(call):
+    conn = get_connection()
+    cur = conn.cursor()
+
+
+    temp = call.data
+    lang = temp.replace("add_", "")
+
+    cur.execute("SELECT languages FROM chats WHERE id = %s", (call.message.chat.id,))
+    chat_langs = cur.fetchone()[0]
+    print(chat_langs)
+    chat_langs.append(lang)
+    
+    cur.execute("UPDATE chats SET languages = %s WHERE id = %s", (chat_langs, call.message.chat.id))
+    bot.send_message(call.message.chat.id, "Language sucessfully added")
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+# Remove a language from a chat.
 @bot.callback_query_handler(func=lambda call: call.data == 'remove')
 def handle_callback(call):
     conn = get_connection()
@@ -58,7 +115,7 @@ def handle_callback(call):
     languages = cur.fetchone()[0]
     if languages:
         for lang in languages:
-            button = types.InlineKeyboardButton(str(lang), callback_data="remove_" + str(lang))
+            button = types.InlineKeyboardButton(code_to_name[lang], callback_data="remove_" + str(lang))
             markup.add(button)
         bot.send_message(call.message.chat.id, "Choose a language to remove", reply_markup=markup)
     else:
@@ -69,6 +126,7 @@ def handle_callback(call):
     conn.commit()
     cur.close()
     conn.close()
+
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("remove_"))
 def handle_callback(call):
